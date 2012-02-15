@@ -40,10 +40,13 @@ trait OGQLParser extends RegexParsers with PackratParsers {
 
     // grammar
 
-    def query: Parser[AstNode] = (intersection | edgeSet)
+    def query: Parser[AstNode] = (intersection | union | edgeSet)
 
     def intersection = edgeSet ~ "=>" ~ query ^^
         { case edgeSet~arrow~query => Intersection(edgeSet, query) }
+
+    def union = edgeSet ~ "," ~ query ^^
+      { case edgeSet~arrow~query => Union(edgeSet, query) }
 
     def edgeSet = predicate | group
 
@@ -51,8 +54,7 @@ trait OGQLParser extends RegexParsers with PackratParsers {
 
     def predicate: Parser[AstNode] = edgeTypePredicate |
                                      nodeTypePredicate |
-                                     wildcardPredicate |
-                                     axisPredicate
+                                     wildcardPredicate
 
     def edgeTypePredicate =
         lowerCaseIdentifier ^^ { EdgeTypePredicate }
@@ -62,10 +64,11 @@ trait OGQLParser extends RegexParsers with PackratParsers {
 
     def wildcardPredicate = "?" ^^ { case _ => WildcardPredicate() }
 
-    def axisPredicate =
+    // axisPredicate
+    /*def axisPredicate =
         (regex("\\^^[A-Z]"r) ~ word) ^^ {
             case x~y => AxisPredicate(x + y)
-        }
+        }*/
 
     def lowerCaseIdentifier =
         (regex("[a-z]"r) ~ word) ^^ { case x~y => x+y } | regex("[a-z]"r)

@@ -9,3 +9,4 @@ case class NodeTypePredicate(id: String) extends AstNode
 case class AxisPredicate(id: String) extends AstNode
 case class WildcardPredicate() extends AstNode
 case class Intersection(lhs: AstNode, rhs: AstNode) extends AstNode
+case class Union(lhs: AstNode, rhs: AstNode) extends AstNode
