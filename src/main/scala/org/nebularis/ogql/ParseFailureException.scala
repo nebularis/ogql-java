@@ -1,3 +1,0 @@
-package org.nebularis.ogql
-
-

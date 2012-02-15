@@ -35,16 +35,6 @@
     </pluginRepositories>
     <dependencies>
         <dependency>
-            <groupId>org.parboiled</groupId>
-            <artifactId>parboiled-core</artifactId>
-            <version>1.0.2</version>
-        </dependency>
-        <dependency>
-            <groupId>org.parboiled</groupId>
-            <artifactId>parboiled-scala</artifactId>
-            <version>1.0.2</version>
-        </dependency>
-        <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
             <version>${scala.version}</version>
