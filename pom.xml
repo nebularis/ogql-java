@@ -97,7 +97,7 @@
                     <launchers>
                         <launcher>
                             <id>myLauncher</id>
-                            <mainClass>org.nebularis.ogql.OGQLParser</mainClass>
+                            <mainClass>org.nebularis.ogql.OGQLParsers</mainClass>
                         </launcher>
                     </launchers>
                     <args>

@@ -28,13 +28,18 @@ import util.parsing.combinator.{PackratParsers, RegexParsers}
 import org.nebularis.ogql.ast._
 import util.parsing.input.Position
 
-trait OGQLParser extends RegexParsers with PackratParsers {
+/**
+ * This trait can be mixed in wherever you want OGQL parsing capabilities.
+ */
+trait OGQLParsers extends RegexParsers with PackratParsers {
 
+    // primary API
     def parseQuery(q: String): AstNode = {
         val result: ParseResult[AstNode] = parseAll(query, q)
         result match {
             case Success(astRoot, _) => astRoot
-            case e: NoSuccess => throw new ParseFailureException(e.msg, e.next.pos)
+            case e: NoSuccess =>
+                throw new ParseFailureException(e.msg, e.next.pos, null)
         }
     }
 
@@ -96,4 +101,16 @@ trait OGQLParser extends RegexParsers with PackratParsers {
     // def space                   = """\s+"""r
 }
 
-class ParseFailureException(msg: String, position: Position) extends RuntimeException
+/**
+ * Straight exposure of the OGQL parsing capability, made available as a class
+ * in order to simplify use by Java application code.
+ *
+ * NB: Due to some internal state that is maintained in scala's `RegexParsers`,
+ * the class is <b>NOT THREAD SAFE</b> so <b>DO NOT</b> attempt to use this
+ * class in multiple threads.
+
+ */
+class OGQLParser extends OGQLParsers { }
+
+class ParseFailureException(msg: String, position: Position, ex: Exception)
+    extends RuntimeException(ex)

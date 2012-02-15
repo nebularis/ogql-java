@@ -7,15 +7,10 @@ import org.scalatest.junit.JUnitRunner
 import org.junit.runner.RunWith
 import org.scalacheck.Gen._
 import org.scalacheck.Gen
-import org.scalacheck.Prop.{classify, collect}
 import org.scalatest.prop.{TableDrivenPropertyChecks, GeneratorDrivenPropertyChecks, Checkers}
 
-/**
- *
- */
 @RunWith(classOf[JUnitRunner])
-class OGQLParserSpec extends OGQLParser
-                     with FlatSpec
+class OGQLParserSpec extends FlatSpec
                      with Checkers
                      with GeneratorDrivenPropertyChecks
                      with TableDrivenPropertyChecks
@@ -27,7 +22,7 @@ class OGQLParserSpec extends OGQLParser
         parsing("abcdef")   should equal (EdgeTypePredicate("abcdef"))
     }
     
-    it should "allow for all valid character sequences in a name based predicate" in {
+    it should "should map camel-cased words to the appropriate predicate node type" in {
         parsing("animal-genus")             should equal (EdgeTypePredicate("animal-genus"))
         parsing("person_ancestry")          should equal (EdgeTypePredicate("person_ancestry"))
         parsing("business2business")        should equal (EdgeTypePredicate("business2business"))
@@ -39,10 +34,12 @@ class OGQLParserSpec extends OGQLParser
     it should "treat groupings as left associative" in {
         parsing("a => (b => c)")            should equal (parsing("a => b => c"))
         parsing("a => (b => (c => d))")     should equal (parsing("a => b => c => d"))
-        parsing("a=>(b=>(c, d))")           should equal (parsing("a=>(b=>(c, d))"))
+        parsing("a=>(b=>(c, d))")           should equal (parsing("a=>b=>c,d"))
 
         // demonstrate that the fixity of the join operators
         // can be controlled with grouping...
+
+        // TODO: tighten this up, a lot...
         parsing("a-b => (((b-c => c-x), b-d) => (d-n, x-n))") should not equal (
             parsing("a-b => b-c => c-x, b-d => d-n, x-nL")
         )
@@ -64,19 +61,14 @@ class OGQLParserSpec extends OGQLParser
             inside(outerRhs) { case Intersection(lhs, rhs) =>
                 inside(lhs) { case Union(b1, c1) =>
                     inside(b1) { case EdgeTypePredicate(b1Id) => b1Id should equal ("b") }
-                    inside(c1) { case EdgeTypePredicate(c1Id) => c1Id should equal ("c") }
-                }
+                    inside(c1) { case EdgeTypePredicate(c1Id) => c1Id should equal ("c") } }
                 inside(rhs) { case Union(uLhs, uRhs) =>
                     inside(uLhs) { case Intersection(b2, d1) =>
                         inside(b2) { case EdgeTypePredicate(b2Id) => b2Id should equal ("b") }
-                        inside(d1) { case EdgeTypePredicate(d1Id) => d1Id should equal ("d") }
-                    }
+                        inside(d1) { case EdgeTypePredicate(d1Id) => d1Id should equal ("d") } }
                     inside(uRhs) { case Intersection(c2, d2) =>
                         inside(c2) { case EdgeTypePredicate(c2Id) => c2Id should equal ("c") }
-                        inside(d2) { case EdgeTypePredicate(d2Id) => d2Id should equal ("d") }
-                    }
-                }
-            }
+                        inside(d2) { case EdgeTypePredicate(d2Id) => d2Id should equal ("d") } } } }
         }
     }
 
@@ -88,9 +80,10 @@ class OGQLParserSpec extends OGQLParser
             whenever(l.size > 0 && r.size > 0) {
                 val t = chooseTraversalOperator
                 val j = chooseJoinOperator
-                val ast = parsing(traverseExpr(t, l, j, r))
-                inside(ast) { case WithModifier(mod, _) =>
-                    mod.char should equal (t)
+                /*info("t = " + String.valueOf(t) + "; j = " + String.valueOf(j))*/
+                inside(parsing(traverseExpr(t, l, j, r))) {
+                    case WithModifier(mod, _) =>
+                        mod.char should equal (t)
                 }
             }
         }
@@ -98,8 +91,10 @@ class OGQLParserSpec extends OGQLParser
 
     it should "puke when passed invalid characters " in {
         forAll ("c", minSize(0)) { (c:String) =>
-            whenever(!c.matches("^[\\w\\-_]*$")) {
-                evaluating { parsing(c) } should produce [ParseFailureException]
+            whenever(c != null && !c.matches("^[\\w\\-_]*$")) {
+                evaluating {
+                    parsing(c)
+                } should produce [ParseFailureException]
             }
         }
     }
@@ -120,7 +115,9 @@ class OGQLParserSpec extends OGQLParser
     def chooseTraversalOperator =
         Gen.frequency((1, "!"),  (1, "*")).apply(Gen.Params()).get
     
-    private def parsing(q: String) = parseQuery(q)
+    private def parsing(q: String) = {
+        new OGQLParser().parseQuery(q)
+    }
 
     private def verboseParsing(q:String) = {
         val result = parsing(q)
