@@ -26,9 +26,9 @@ package org.nebularis.ogql
 import java.lang.String
 import util.parsing.combinator.{PackratParsers, RegexParsers}
 import org.nebularis.ogql.ast._
-import scala.util.parsing.input.Position
+import util.parsing.input.Position
 
-class OGQLParser extends RegexParsers with PackratParsers {
+trait OGQLParser extends RegexParsers with PackratParsers {
 
     def parseQuery(q: String): AstNode = {
         val result: ParseResult[AstNode] = parse(query, q)
@@ -55,10 +55,10 @@ class OGQLParser extends RegexParsers with PackratParsers {
                                      axisPredicate
 
     def edgeTypePredicate =
-        lowerCaseIdentifier ^^ { case s => EdgeTypePredicate(s) }
+        lowerCaseIdentifier ^^ { EdgeTypePredicate }
 
     def nodeTypePredicate =
-        (regex("[A-Z]"r) ~ word) ^^ { case x~y => NodeTypePredicate(x + y) }
+        upperCaseIdentifier ^^ { NodeTypePredicate }
 
     def wildcardPredicate = "?" ^^ { case _ => WildcardPredicate() }
 
@@ -68,9 +68,14 @@ class OGQLParser extends RegexParsers with PackratParsers {
         }
 
     def lowerCaseIdentifier =
-        regex("[a-z]"r) | (regex("[a-z]"r) ~ word) ^^ { case x~y => x+y }
+        (regex("[a-z]"r) ~ word) ^^ { case x~y => x+y } | regex("[a-z]"r)
 
-    def word = regex("[\\w\\-_]+"r)
+    def upperCaseIdentifier =
+        (regex("[A-Z]"r) ~ word) ^^ { case x~y => x+y }
+
+    def word = (regex("[\\w\\-_]+"r) *) ^^ {
+        case l:List[String] => l.foldLeft("") { (acc, in) => acc + in }
+    }
 
 
     // def string                  = "'" ~ "[^']*".r ~ "'"
