@@ -25,6 +25,11 @@ class OGQLParserSpec extends OGQLParser
         parsing("person_ancestry")          should equal (EdgeTypePredicate("person_ancestry"))
         parsing("Fruit")                    should equal (NodeTypePredicate("Fruit"))
         parsing("Golden_Delicious_Apple")   should equal (NodeTypePredicate("Golden_Delicious_Apple"))
+        parsing("Savoy-Cabbage")            should equal (NodeTypePredicate("Savoy-Cabbage"))
+
+        intercept[ParseFailureException] {
+            verboseParsing("non^valid!characters$in&this*name;")
+        }
     }
 
     it should "assign each axis of a join operation to the appropraite predicate type" in {

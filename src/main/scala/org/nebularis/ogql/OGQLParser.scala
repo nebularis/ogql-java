@@ -31,7 +31,7 @@ import util.parsing.input.Position
 trait OGQLParser extends RegexParsers with PackratParsers {
 
     def parseQuery(q: String): AstNode = {
-        val result: ParseResult[AstNode] = parse(query, q)
+        val result: ParseResult[AstNode] = parseAll(query, q)
         result match {
             case Success(astRoot, _) => astRoot
             case e: NoSuccess => throw new ParseFailureException(e.msg, e.next.pos)
@@ -40,7 +40,7 @@ trait OGQLParser extends RegexParsers with PackratParsers {
 
     // grammar
 
-    def query: Parser[AstNode] = intersection | edgeSet
+    def query: Parser[AstNode] = (intersection | edgeSet)
 
     def intersection = edgeSet ~ "=>" ~ query ^^
         { case edgeSet~arrow~query => Intersection(edgeSet, query) }
