@@ -46,9 +46,20 @@ trait OGQLParser extends RegexParsers with PackratParsers {
         { case edgeSet~arrow~query => Intersection(edgeSet, query) }
 
     def union = edgeSet ~ "," ~ query ^^
-      { case edgeSet~arrow~query => Union(edgeSet, query) }
+        { case edgeSet~comma~query => Union(edgeSet, query) }
 
-    def edgeSet = predicate | group
+    def edgeSet = ((traversalModifier?) ~ (predicate | group)) ^^ {
+        case mod~set => mod match {
+            case None => set
+            case Some(modifier) => WithModifier(modifier, set)
+        }
+    }
+
+    def traversalModifier = negationModifier | recursionModifier
+    
+    def negationModifier = literal("!") ^^ { NegationModifier }
+
+    def recursionModifier = literal("*") ^^ { RecursionModifier }
 
     def group = "(" ~> query <~ ")" ^^ { s => s }
 
