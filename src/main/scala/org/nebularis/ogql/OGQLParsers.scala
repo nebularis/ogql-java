@@ -45,7 +45,8 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
 
     // grammar
 
-    def query: Parser[AstNode] = (intersection | union | edgeSet)
+    def query: Parser[AstNode with QueryRepresentation] =
+        (intersection | union | edgeSet)
 
     def intersection = edgeSet ~ "=>" ~ query ^^
         { case edgeSet~arrow~query => Intersection(edgeSet, query) }
@@ -53,7 +54,8 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
     def union = edgeSet ~ "," ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
-    def edgeSet = ((traversalModifier?) ~ (predicate | group)) ^^ {
+    def edgeSet: Parser[AstNode with QueryRepresentation] =
+        ((traversalModifier?) ~ (predicate | group)) ^^ {
         case mod~set => mod match {
             case None => set
             case Some(modifier) => WithModifier(modifier, set)
@@ -68,9 +70,10 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
 
     def group = "(" ~> query <~ ")" ^^ { s => s }
 
-    def predicate: Parser[AstNode] = edgeTypePredicate |
-                                     nodeTypePredicate |
-                                     wildcardPredicate
+    def predicate: Parser[AstNode with QueryRepresentation] =
+        edgeTypePredicate |
+        nodeTypePredicate |
+        wildcardPredicate
 
     def edgeTypePredicate =
         lowerCaseIdentifier ^^ { EdgeTypePredicate }

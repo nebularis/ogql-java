@@ -7,13 +7,11 @@ import org.scalatest.junit.JUnitRunner
 import org.junit.runner.RunWith
 import org.scalacheck.Gen._
 import org.scalacheck.Gen
-import org.scalatest.prop.{TableDrivenPropertyChecks, GeneratorDrivenPropertyChecks, Checkers}
+import org.scalatest.prop.{GeneratorDrivenPropertyChecks, Checkers}
 
 @RunWith(classOf[JUnitRunner])
 class OGQLParserSpec extends FlatSpec
-                     with Checkers
                      with GeneratorDrivenPropertyChecks
-                     with TableDrivenPropertyChecks
                      with ShouldMatchers
                      with Inside {
 
@@ -29,6 +27,16 @@ class OGQLParserSpec extends FlatSpec
         parsing("Fruit")                    should equal (NodeTypePredicate("Fruit"))
         parsing("Golden_Delicious_Apple")   should equal (NodeTypePredicate("Golden_Delicious_Apple"))
         parsing("Savoy-Cabbage")            should equal (NodeTypePredicate("Savoy-Cabbage"))
+    }
+
+    it should "puke when passed invalid characters " in {
+        forAll ("c", minSize(0)) { (c:String) =>
+            whenever(c != null && !c.matches("^[\\w\\-_]*$")) {
+                evaluating {
+                    parsing(c)
+                } should produce [ParseFailureException]
+            }
+        }
     }
 
     it should "treat groupings as left associative" in {
@@ -77,24 +85,39 @@ class OGQLParserSpec extends FlatSpec
                 (Gen.alphaStr, "r"),
                 maxDiscarded(100),
                 minSize(2)) { (l: String, r: String) =>
+
             whenever(l.size > 0 && r.size > 0) {
                 val t = chooseTraversalOperator
                 val j = chooseJoinOperator
-                /*info("t = " + String.valueOf(t) + "; j = " + String.valueOf(j))*/
-                inside(parsing(traverseExpr(t, l, j, r))) {
-                    case WithModifier(mod, _) =>
-                        mod.char should equal (t)
-                }
-            }
-        }
-    }
 
-    it should "puke when passed invalid characters " in {
-        forAll ("c", minSize(0)) { (c:String) =>
-            whenever(c != null && !c.matches("^[\\w\\-_]*$")) {
-                evaluating {
-                    parsing(c)
-                } should produce [ParseFailureException]
+                // generate simple query := <t>(<l> <j> <r>), e.g., *(a => b)
+                inside(parsing(traverseExpr(t, l, j, r))) {
+                    case WithModifier(mod, ast) =>
+                        mod.tokenString should equal (t)
+                        inside(ast) { 
+                            case Intersection(_1, _2) => j should be ("=>")
+                            case Union(_a, _b) => j should be (",")
+                        }
+                }
+
+                // generate query applying the traversal operator to the rhs,
+                // e.g., `(a => !b)' or `(xs => *ys-xs)'
+                inside(parsing(traverseRhs(t, l, j, r))) {
+                    case Intersection(_, rhs) =>
+                        inside(rhs) {
+                            case WithModifier(mod, _) =>
+                                mod.tokenString should equal (t) }
+                    case Union(_, rhs) =>
+                        inside(rhs) {
+                            case WithModifier(mod, _) =>
+                                mod.tokenString should equal (t) }
+                }
+
+                // ignore the rhs and generate a query against the lhs only
+                inside(parsing(t.concat(l))) {
+                    case WithModifier(mod, _) =>
+                        mod.tokenString should equal (t)
+                }
             }
         }
     }
@@ -106,8 +129,12 @@ class OGQLParserSpec extends FlatSpec
 
     val padding = " "
 
+    def traverseRhs(t: String, l: String, j: String, r: String) =
+        traverseExpr("", l, j, t.concat(r))
+
     def traverseExpr(t: String, l: String, j: String, r: String) =
-        List(t, "(", l, padding, j, padding, r, ")").foldLeft("")((x,y) => x.concat(y))
+        List(t, "(", l, padding, j, padding,
+                r, ")").foldLeft("")((x,y) => x.concat(y))
 
     def chooseJoinOperator =
         Gen.frequency((1, "=>"), (1, ",")).apply(Gen.Params()).get
