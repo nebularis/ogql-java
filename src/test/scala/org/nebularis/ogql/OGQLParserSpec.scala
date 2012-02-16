@@ -19,18 +19,18 @@ class OGQLParserSpec extends FlatSpec
     it should "be reversible into a query (string) representation" in {
         val q = "a => b, c => c-d, c-e"
         val qs = parsed(q).queryString
-        info("qs: " + qs)
+        // info("qs: " + qs)
         qs should not equal (q)
         qs should equal ("(a => (b, (c => (c-d, c-e))))")
     }
     
-    it should "produce a semantically equivalent representation" in {
+    /*it should "produce a semantically equivalent representation" in {
         val qs =
             parsed("a-b => (((b-c => c-x), b-d) => (d-n, x-n))")
         info(qs.toString())
         info("now reparsing from: " + qs.queryString)
         info(parsed(qs.queryString).toString())
-    }
+    }*/
 
     it should "consume all its inputs greedily" in {
         parsed("a")        should equal (EdgeTypePredicate("a"))
@@ -106,33 +106,57 @@ class OGQLParserSpec extends FlatSpec
         val queryConstructs =
             Table(
                 ("l", "r", "s"),
+
+                // ((intersect <- (intersect, edge-name)) => (intersect))
                 ("(customer => order)",
                  "((order-shipment => shipment-carrier), order-completion)",
-                  Left("(order-product => product-supplier)")))
+                  Left("(order-product => product-supplier)")),
+
+                // ((*intersect <- (union)) => (edge-name))
+                ("(*(personRoles => roleRelationship))",
+                 "(staff-reumerationHistory)",
+                  Left("(employee-contract, employee-roles)")),
+
+                // ((*edge-name) => (edge-name <- union))
+                ("(*manager-employee)",
+                  "(staff-reumerationHistory)",
+                  Right("(pay-details, pay-scale)")))
         
         forAll (queryConstructs) {
             (l: String,  r: String, s: Either[String, String]) =>
                 s match {
                     case Left(sq) =>
-                        inside(parsed("((".concat(l).concat(" <- ")
+                        inside(verboseParsing("((".concat(l).concat(" <- ")
                                          .concat(sq).concat(") => ")
                                          .concat(r).concat(")"))) {
-                            case Intersection(WithSubquery(leftNode, subQuery), _) =>
-                                subQuery.queryString should be (sq)
+                            case ast: JoinType =>
+                                checkSubQuery(sq, ast.lhs)
+                            case WithModifier(_, ast: JoinType) =>
+                                checkSubQuery(sq, ast.lhs)
                             case _ =>
                                 fail("Expected WithSubquery node nested on the LHS")
                         }
                     case Right(sq) =>
-                        inside(parsed("(".concat(l).concat(" => (")
+                        inside(verboseParsing("(".concat(l).concat(" => (")
                                          .concat(r).concat(" <- ")
                                          .concat(sq).concat("))"))) {
-                            case WithSubquery(leftNode, subQuery) =>
-                                subQuery.queryString should be (sq)
+                            case ast: JoinType =>
+                                checkSubQuery(sq, ast.rhs)
+                            case WithModifier(_, ast: JoinType) =>
+                                checkSubQuery(sq, ast.rhs)
                             case _ =>
-                                fail("Expected WithSubquery node on the RHS")
+                                fail("Expected WithSubquery node nested on the RHS")
                         }
                 }
         }
+    }
+
+    def checkSubQuery(sq: String, ast: Any) = ast match {
+        case WithSubquery(leftNode, subQuery) =>
+            info("Original: " + sq + "; Generated: " + subQuery.queryString)
+            subQuery.queryString should equal (sq)
+        case _ =>
+            fail("Expected WithSubquery node nested on the LHS")
     }
 
     it should "support negated traversal modifiers in any valid join expression" in {
@@ -206,7 +230,14 @@ class OGQLParserSpec extends FlatSpec
 
     private def verboseParsing(q:String) = {
         info("Parsing: " + q)
-        val result = parsed(q)
+        val result =
+            try {
+                parsed(q)
+            } catch {
+                case e: ParseFailureException =>
+                    info("Parse Error: " + e.msg + ": position=" + e.position)
+                    throw e
+            }
         info("Result: " + result.queryString)
         result
     }

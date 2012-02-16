@@ -51,7 +51,11 @@ case class WildcardPredicate()
 
 case class Intersection(lhs: AstNode,
                         rhs: AstNode)
-    extends AstNode with JoinType { def operator = " => " }
+    extends AstNode with JoinType {
+    def operator = " => "
+
+    var strict: Boolean = false
+}
 
 case class Union(lhs: AstNode with QueryRepresentation,
                  rhs: AstNode with QueryRepresentation)

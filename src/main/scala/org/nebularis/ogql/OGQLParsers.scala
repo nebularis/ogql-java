@@ -28,10 +28,16 @@ import util.parsing.combinator.{PackratParsers, RegexParsers}
 import org.nebularis.ogql.ast._
 import util.parsing.input.Position
 
+trait QueryParser {
+    def parseQuery(q: String): AstNode
+}
+
 /**
  * This trait can be mixed in wherever you want OGQL parsing capabilities.
  */
-trait OGQLParsers extends RegexParsers with PackratParsers {
+trait OGQLParsers extends RegexParsers
+                  with PackratParsers
+                  with QueryParser {
 
     // primary API
 
@@ -55,9 +61,23 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
             }  
         }
 
-    def intersection = edgeSet ~ "=>" ~ query ^^
-        { case edgeSet~arrow~query => Intersection(edgeSet, query) }
+    def intersection = edgeSet ~ intersectionOperator ~ query ^^ {
+        case edgeSet~op~query =>
+            op match {
+                case "=>" => Intersection(edgeSet, query)
+                case "~>" =>
+                    val ast = Intersection(edgeSet, query)
+                    ast.strict = true
+                    ast
+            }
+    }
 
+    def intersectionOperator = (strictJoin | nonStrictJoin)
+    
+    def strictJoin = literal("=>")
+    
+    def nonStrictJoin = literal("~>")
+    
     def union = edgeSet ~ "," ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
@@ -121,5 +141,5 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
  */
 class OGQLParser extends OGQLParsers { }
 
-class ParseFailureException(msg: String, position: Position, ex: Exception)
+class ParseFailureException(val msg: String, val position: Position, ex: Exception)
     extends RuntimeException(msg, ex)
