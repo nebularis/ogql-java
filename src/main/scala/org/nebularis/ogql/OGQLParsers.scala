@@ -34,8 +34,10 @@ import util.parsing.input.Position
 trait OGQLParsers extends RegexParsers with PackratParsers {
 
     // primary API
-    def parseQuery(q: String): AstNode = {
-        val result: ParseResult[AstNode] = parseAll(query, q)
+
+    def parseQuery(q: String): AstNode with QueryRepresentation = {
+        val result: ParseResult[AstNode with QueryRepresentation] =
+            parseAll(query, q)
         result match {
             case Success(astRoot, _) => astRoot
             case e: NoSuccess =>
@@ -108,10 +110,9 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
  * Straight exposure of the OGQL parsing capability, made available as a class
  * in order to simplify use by Java application code.
  *
- * NB: Due to some internal state that is maintained in scala's `RegexParsers`,
- * the class is <b>NOT THREAD SAFE</b> so <b>DO NOT</b> attempt to use this
- * class in multiple threads.
-
+ * NB: Due to some internal state that is maintained in Scala's 'RegexParsers',
+ * this class is <b>NOT THREAD SAFE</b> so <b>DO NOT</b> attempt to use it
+ * in multiple threads.
  */
 class OGQLParser extends OGQLParsers { }
 

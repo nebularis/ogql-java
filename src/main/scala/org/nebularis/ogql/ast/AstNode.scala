@@ -1,11 +1,19 @@
 package org.nebularis.ogql.ast
 
 /**
+ * The base class for all our ast nodes
+ */
+sealed abstract class AstNode
+
+/**
  * Provides a means of checking which modifiers are added
  * to which nodes once we've successfully built our AST
  */
 trait Modifier { val tokenString: String = null }
 
+/**
+ * Gives us an interface for turning ast nodes back into a query string
+ */
 trait QueryRepresentation {
     def queryString: String
 }
@@ -20,13 +28,11 @@ trait JoinType extends QueryRepresentation {
     def rhs: QueryRepresentation
     def operator: String
     override def queryString =
-        lhs.queryString.concat(operator).concat(lhs.queryString)
+        "(".concat(lhs.queryString)
+           .concat(operator)
+           .concat(rhs.queryString)
+           .concat(")")
 }
-
-/**
- * The base class for all our ast nodes
- */
-sealed abstract class AstNode
 
 // node classes
 
