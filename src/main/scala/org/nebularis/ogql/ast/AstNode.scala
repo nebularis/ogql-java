@@ -1,21 +1,19 @@
 package org.nebularis.ogql.ast
 
 /**
- * The base class for all our ast nodes
+ * Gives us an interface for turning ast nodes back into a query string
  */
-sealed abstract class AstNode
+trait QueryRepresentation {
+    def queryString: String
+}
 
 /**
  * Provides a means of checking which modifiers are added
  * to which nodes once we've successfully built our AST
  */
-trait Modifier { val tokenString: String = null }
-
-/**
- * Gives us an interface for turning ast nodes back into a query string
- */
-trait QueryRepresentation {
-    def queryString: String
+trait Modifier extends QueryRepresentation {
+    val tokenString: String = null
+    override def queryString = tokenString
 }
 
 trait Predicate extends QueryRepresentation {
@@ -36,6 +34,11 @@ trait JoinType extends QueryRepresentation {
 
 // node classes
 
+/**
+ * The base class for all our ast nodes
+ */
+sealed abstract class AstNode extends QueryRepresentation
+
 case class EdgeTypePredicate(id: String) extends AstNode with Predicate
 case class NodeTypePredicate(id: String) extends AstNode with Predicate
 
@@ -46,8 +49,8 @@ case class AxisPredicate(id: String) extends AstNode with Predicate {
 case class WildcardPredicate()
     extends AstNode with QueryRepresentation { def queryString = "?" }
 
-case class Intersection(lhs: AstNode with QueryRepresentation,
-                        rhs: AstNode with QueryRepresentation)
+case class Intersection(lhs: AstNode,
+                        rhs: AstNode)
     extends AstNode with JoinType { def operator = " => " }
 
 case class Union(lhs: AstNode with QueryRepresentation,
@@ -60,7 +63,14 @@ case class NegationModifier(override val tokenString: String)
 case class RecursionModifier(override val tokenString: String)
     extends AstNode with Modifier
 
-case class WithModifier(mod: Modifier, node: AstNode with QueryRepresentation)
+case class WithModifier(mod: Modifier, node: AstNode)
     extends AstNode with QueryRepresentation {
     override def queryString = mod.tokenString.concat(node.queryString)
+}
+
+case class WithSubquery(node: AstNode, subNode: AstNode)
+    extends AstNode with JoinType {
+    override def lhs = node
+    override def rhs = subNode
+    override def operator = " <- "
 }

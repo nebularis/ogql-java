@@ -7,12 +7,12 @@ import org.scalatest.junit.JUnitRunner
 import org.junit.runner.RunWith
 import org.scalacheck.Gen._
 import org.scalacheck.Gen
-import org.scalatest.prop.{GeneratorDrivenPropertyChecks, Checkers}
+import org.scalatest.prop.{PropertyChecks, GeneratorDrivenPropertyChecks, Checkers}
 
 @RunWith(classOf[JUnitRunner])
 class OGQLParserSpec extends FlatSpec
                      with GeneratorDrivenPropertyChecks
-                     with Checkers
+                     with PropertyChecks
                      with ShouldMatchers
                      with Inside {
 
@@ -102,6 +102,39 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
+    it should "apply sub-queries to any valid query expression" in {
+        val queryConstructs =
+            Table(
+                ("l", "r", "s"),
+                ("(customer => order)",
+                 "((order-shipment => shipment-carrier), order-completion)",
+                  Left("(order-product => product-supplier)")))
+        
+        forAll (queryConstructs) {
+            (l: String,  r: String, s: Either[String, String]) =>
+                s match {
+                    case Left(sq) =>
+                        inside(parsed("((".concat(l).concat(" <- ")
+                                         .concat(sq).concat(") => ")
+                                         .concat(r).concat(")"))) {
+                            case Intersection(WithSubquery(leftNode, subQuery), _) =>
+                                subQuery.queryString should be (sq)
+                            case _ =>
+                                fail("Expected WithSubquery node nested on the LHS")
+                        }
+                    case Right(sq) =>
+                        inside(parsed("(".concat(l).concat(" => (")
+                                         .concat(r).concat(" <- ")
+                                         .concat(sq).concat("))"))) {
+                            case WithSubquery(leftNode, subQuery) =>
+                                subQuery.queryString should be (sq)
+                            case _ =>
+                                fail("Expected WithSubquery node on the RHS")
+                        }
+                }
+        }
+    }
+
     it should "support negated traversal modifiers in any valid join expression" in {
         forAll ((Gen.alphaStr, "l"),
                 (Gen.alphaStr, "r"),
@@ -172,8 +205,9 @@ class OGQLParserSpec extends FlatSpec
     }
 
     private def verboseParsing(q:String) = {
+        info("Parsing: " + q)
         val result = parsed(q)
-        println(result)
+        info("Result: " + result.queryString)
         result
     }
 }

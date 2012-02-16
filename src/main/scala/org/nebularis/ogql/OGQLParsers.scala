@@ -35,8 +35,8 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
 
     // primary API
 
-    def parseQuery(q: String): AstNode with QueryRepresentation = {
-        val result: ParseResult[AstNode with QueryRepresentation] =
+    def parseQuery(q: String): AstNode = {
+        val result: ParseResult[AstNode] =
             parseAll(query, q)
         result match {
             case Success(astRoot, _) => astRoot
@@ -47,8 +47,13 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
 
     // grammar
 
-    def query: Parser[AstNode with QueryRepresentation] =
-        (intersection | union | edgeSet)
+    def query: Parser[AstNode] =
+        ((intersection | union | edgeSet) ~ (subQuery?)) ^^ {
+            case q~sub => sub match {
+                case None => q
+                case Some(ast) => WithSubquery(q, ast)
+            }  
+        }
 
     def intersection = edgeSet ~ "=>" ~ query ^^
         { case edgeSet~arrow~query => Intersection(edgeSet, query) }
@@ -56,7 +61,7 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
     def union = edgeSet ~ "," ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
-    def edgeSet: Parser[AstNode with QueryRepresentation] =
+    def edgeSet: Parser[AstNode] =
         ((traversalModifier?) ~ (predicate | group)) ^^ {
         case mod~set => mod match {
             case None => set
@@ -64,15 +69,11 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
         }
     }
 
-    def traversalModifier = negationModifier | recursionModifier
+    def subQuery = "<-" ~> query
     
-    def negationModifier = literal("!") ^^ { NegationModifier }
-
-    def recursionModifier = literal("*") ^^ { RecursionModifier }
-
     def group = "(" ~> query <~ ")" ^^ { s => s }
 
-    def predicate: Parser[AstNode with QueryRepresentation] =
+    def predicate: Parser[AstNode] =
         edgeTypePredicate |
         nodeTypePredicate |
         wildcardPredicate
@@ -91,6 +92,12 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
             case x~y => AxisPredicate(x + y)
         }*/
 
+    def traversalModifier = negationModifier | recursionModifier
+
+    def negationModifier = literal("!") ^^ { NegationModifier }
+
+    def recursionModifier = literal("*") ^^ { RecursionModifier }
+
     def lowerCaseIdentifier =
         (regex("[a-z]"r) ~ word) ^^ { case x~y => x+y } | regex("[a-z]"r)
 
@@ -101,9 +108,7 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
         case l:List[String] => l.foldLeft("") { (acc, in) => acc + in }
     }
 
-
     // def string                  = "'" ~ "[^']*".r ~ "'"
-    // def space                   = """\s+"""r
 }
 
 /**
@@ -117,4 +122,4 @@ trait OGQLParsers extends RegexParsers with PackratParsers {
 class OGQLParser extends OGQLParsers { }
 
 class ParseFailureException(msg: String, position: Position, ex: Exception)
-    extends RuntimeException(ex)
+    extends RuntimeException(msg, ex)

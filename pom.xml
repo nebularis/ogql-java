@@ -57,13 +57,21 @@
             <version>1.9</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.scala-tools.testing</groupId>
-            <artifactId>scalacheck_2.9.1</artifactId>
-            <version>1.9</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
+
+    <distributionManagement>
+        <repository>
+            <id>releases</id>
+            <name>CCCS Releases</name>
+            <url>http://craigcook.co.uk/artefacts/content/repositories/releases</url>
+        </repository>
+        <snapshotRepository>
+            <id>snapshots</id>
+            <name>CCCS SNAPSHOTs</name>
+            <url>http://craigcook.co.uk/artefacts/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <build>
         <plugins>
             <plugin>
