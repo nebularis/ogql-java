@@ -197,12 +197,44 @@ class OGQLParserSpec extends FlatSpec
 
             whenever(l.size > 0 && r.size > 0) {
                 val j = chooseMaybeStrictSubQueryOperator
-                // generate simple query := (a ~> b) OR (a => b)
+                // generate simple query := (a <~ b) OR (a <- b)
                 inside(verboseParsing(joinExpr(l, j, r))) {
                     case withSubQuery: WithSubquery =>
                         withSubQuery.strict match {
                             case true => j should equal ("<-")
                             case false => j should equal ("<~")
+                        }
+                }
+            }
+        }
+    }
+
+    it should "distinguish between the axis to which subqueries are applied" in {
+        forAll ((Gen.alphaStr, "l"),
+                (Gen.alphaStr, "r"),
+                (chooseMaybeStrict, "s"),
+                (chooseSomeAxis, "a"),
+                maxDiscarded(100),
+                minSize(2)) { (l: String, r: String, s: Boolean, a: Axis) =>
+
+            whenever(l.size > 0 && r.size > 0) {
+                val q = new WithSubquery(EdgeTypePredicate(l),
+                                         EdgeTypePredicate(r), s, a)
+
+                // generate left/right query := (a <~~ b) OR (a <~ b)
+                inside(parsed(q.queryString)) {
+                    case withSubQuery: WithSubquery =>
+                        withSubQuery.strict match {
+                            case true =>
+                                withSubQuery.axis match {
+                                    case LeftAxis => q.operator should equal (" <-- ")
+                                    case RightAxis => q.operator should equal (" <- ")
+                                }
+                            case false =>
+                                withSubQuery.axis match {
+                                    case LeftAxis => q.operator should equal (" <~~ ")
+                                    case RightAxis => q.operator should equal (" <~ ")
+                                }
                         }
                 }
             }
@@ -265,16 +297,23 @@ class OGQLParserSpec extends FlatSpec
 
     val padding = " "
 
-    def checkSubQuery(sq: String, ast: Any) = ast match {
-        case WithSubquery(leftNode, subQuery) =>
-            info("Original: " + sq + "; Generated: " + subQuery.queryString)
-            subQuery.queryString should equal (sq)
-        case _ =>
-            fail("Expected WithSubquery node nested on the LHS")
+    def checkSubQuery(sq: String, ast: Any) {
+        ast match {
+            case WithSubquery(leftNode, subQuery) =>
+                info("Original: " + sq + "; Generated: " + subQuery.queryString)
+                subQuery.queryString should equal(sq)
+            case _ =>
+                fail("Expected WithSubquery node nested on the LHS")
+        }
     }
 
     def traverseRhs(t: String, l: String, j: String, r: String) =
         traverseExpr("", l, j, t.concat(r))
+
+    def priorJoinExpr(l: String, j: WithSubquery, r: String) = {
+        j.axis = LeftAxis
+        traverseExpr("", l, j.operator, r)
+    }
 
     def joinExpr(l: String, j: String, r: String) =
         traverseExpr("", l, j, r)
@@ -282,6 +321,9 @@ class OGQLParserSpec extends FlatSpec
     def traverseExpr(t: String, l: String, j: String, r: String) =
         List(t, "(", l, padding, j, padding,
                 r, ")").foldLeft("")((x,y) => x.concat(y))
+
+    def chooseAxis =
+        Gen.frequency((1, LeftAxis), (1, RightAxis)).apply(Gen.Params()).get
 
     def chooseJoinOperator =
         Gen.frequency((1, "=>"), (1, ",")).apply(Gen.Params()).get
@@ -294,6 +336,12 @@ class OGQLParserSpec extends FlatSpec
 
     def chooseMaybeStrictSubQueryOperator =
         Gen.frequency((1, "<-"), (1, "<~")).apply(Gen.Params()).get
+
+    def chooseMaybeStrict =
+        Gen.frequency((1, true), (1, false))
+
+    def chooseSomeAxis =
+        Gen.frequency((1, LeftAxis), (1, RightAxis))
 
     private def parsed(q: String) = {
         new OGQLParser().parseQuery(q)

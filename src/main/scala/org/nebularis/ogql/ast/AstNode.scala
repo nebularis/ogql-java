@@ -89,13 +89,19 @@ case class WithSubquery(node: AstNode, subNode: AstNode)
 
     override def lhs = node
     override def rhs = subNode
-    override def operator =
-        if (strict) {
-            if (axis == LeftAxis) { " <-- " }
-            else { " <- "}
-        } else {
-            if (axis == LeftAxis) { " <~~ " }
-            else { " <~~ " }
-        }
+    override def operator = strict match {
+        case true => mkString("-")
+        case false => mkString("~")
+    }
+
     var axis: Axis = RightAxis
+
+    private def mkString(x: String) = {
+        " <" + List.fill(strokeLength)(x).foldRight(" ") {(x,y) => x+y}
+    }
+
+    private def strokeLength = axis match {
+        case LeftAxis => 2
+        case RightAxis => 1
+    }
 }
