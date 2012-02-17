@@ -38,6 +38,22 @@ class ParserFeatureSpec extends FeatureSpec
         }
     }
 
+    feature("Including nodes in a join, whilst excluding them from the results") {
+        ignore("I want to find someone's grandparents") {
+            val qs =
+                "Person['Thor Odinsson'] => { person-ancestor } => person-ancestor"
+        }
+    }
+
+    feature("Checking for the existence of something") {
+        ignore("Finding Managers with no employees/staff-list") {
+            val qs =
+                "{ Role[Manager] } => " +
+                  "Person => EMPTY(staff-list)"
+                  "Person => EXISTS(staff-list)"
+        }
+    }
+
     feature("Parsing OGQL Join Queries") {
         info("As a developer")
         info("I want to parse OGQL join queries")
@@ -107,6 +123,54 @@ class ParserFeatureSpec extends FeatureSpec
                 WithSubquery(EdgeTypePredicate(left),
                              EdgeTypePredicate(subQuery)),
                 EdgeTypePredicate(right)))
+        }
+
+        scenario("An OGQL 'intersect' query with a " +
+                 "sub-query on the right nodeset") {
+
+            // Server => (Host, DataCentre) <- RuleBase
+            val svr = "Server"
+            val (left, right) = ("Host", "DataCentre")
+            val subQuery = "RuleBase"
+            val q = svr + " => (" +
+                        left.concat(",").concat(right) +
+                            ") <- " + subQuery
+
+            given("an 'intersect' with a right oriented sub-query: ".concat(q))
+            when("the parser is invoked")
+            then("the resulting AST should place the " +
+                 "sub-query in the correct position")
+
+            parser.parseQuery(q) should equal (Intersection(
+                NodeTypePredicate(svr),
+                WithSubquery(Union(NodeTypePredicate("Host"),
+                                   NodeTypePredicate("DataCentre")),
+                    NodeTypePredicate("RuleBase"))))
+        }
+
+        scenario("An OGQL 'intersect' query with a nested sub-query") {
+            // Server => (Host <- (ServiceContract, EnvironmentConfig)) => Region
+            val svr = "Server"
+            val (left, subQuery) = ("Host", "(ServiceContract, EnvironmentConfig)")
+            val right = "Region"
+            val q = svr.concat(" => ")
+                       .concat("(").concat(left)
+                       .concat(" <- ").concat(subQuery)
+                       .concat(") => ").concat(right)
+
+            given("an 'intersect' with a nested sub-query: ".concat(q))
+            when("the parser is invoked")
+            then("the resulting AST should place the " +
+                 "sub-query in the correct position")
+
+            parser.parseQuery(q) should equal (
+                Intersection(
+                    NodeTypePredicate(svr),
+                    Intersection(
+                        WithSubquery(NodeTypePredicate("Host"),
+                                     Union(NodeTypePredicate("ServiceContract"),
+                                           NodeTypePredicate("EnvironmentConfig"))),
+                        NodeTypePredicate("Region"))))
         }
 
         ignore("An OGQL 'union' query") {
