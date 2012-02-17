@@ -55,6 +55,11 @@ case class Intersection(lhs: AstNode,
                         rhs: AstNode)
     extends AstNode with JoinType {
 
+    def this(lhs: AstNode, rhs: AstNode, strict: Boolean) = {
+        this(lhs, rhs)
+        this.strict = strict
+    }
+
     def operator = if (strict) { " => " } else { " ~> " }
 }
 

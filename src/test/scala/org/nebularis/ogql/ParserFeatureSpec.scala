@@ -14,6 +14,8 @@ class ParserFeatureSpec extends FeatureSpec
 
     val parser: QueryParser = new OGQLParser
 
+    val theParserIsInvoked = "the parser is invoked"
+
     feature("Parsing Simple OGQL Queries") {
         info("As a developer")
         info("I want to parse simple OGQL queries")
@@ -22,7 +24,7 @@ class ParserFeatureSpec extends FeatureSpec
         scenario("A query operating on a single edge type predicate") {
             val p = "catalogue-products"
             given("an edge type predicate query '".concat(p).concat("'"))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should contain only the predicate")
 
             parser.parseQuery(p) should equal (EdgeTypePredicate(p))
@@ -31,7 +33,7 @@ class ParserFeatureSpec extends FeatureSpec
         scenario("A query operating on a single node type predicate") {
             val p = "Market"
             given("a node type predicate query '".concat(p).concat("'"))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should contain only the predicate")
 
             parser.parseQuery(p) should equal (NodeTypePredicate(p))
@@ -48,7 +50,7 @@ class ParserFeatureSpec extends FeatureSpec
             val q = left.concat(" => ").concat(right)
 
             given("an OGQL 'intersect' query: ".concat(q))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should contain both parts")
 
             parser.parseQuery(q) should equal (
@@ -60,7 +62,7 @@ class ParserFeatureSpec extends FeatureSpec
             val q = left.concat(", ").concat(right)
 
             given("an OGQL 'union' query: ".concat(q))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should contain both parts")
 
             parser.parseQuery(q) should equal (
@@ -80,7 +82,7 @@ class ParserFeatureSpec extends FeatureSpec
             val q = predicate.concat(" <- ").concat(subQuery)
 
             given("an OGQL query with sub-query: ".concat(q))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should contain all parts of the AST")
 
             parser.parseQuery(q) should equal (
@@ -99,7 +101,7 @@ class ParserFeatureSpec extends FeatureSpec
                     " => " + right
 
             given("an 'intersect' with a sub-query: ".concat(q))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should contain both the original " +
                  "query, and the sub-query")
 
@@ -121,7 +123,7 @@ class ParserFeatureSpec extends FeatureSpec
                             ") <- " + subQuery
 
             given("an 'intersect' with a right oriented sub-query: ".concat(q))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should place the " +
                  "sub-query in the correct position")
 
@@ -143,7 +145,7 @@ class ParserFeatureSpec extends FeatureSpec
                        .concat(") => ").concat(right)
 
             given("an 'intersect' with a nested sub-query: ".concat(q))
-            when("the parser is invoked")
+            when(theParserIsInvoked)
             then("the resulting AST should place the " +
                  "sub-query in the correct position")
 
@@ -157,36 +159,74 @@ class ParserFeatureSpec extends FeatureSpec
                         NodeTypePredicate("Region"))))
         }
 
-        ignore("An OGQL 'union' with a nested sub-query") {
-
-            // (a <- (a-b, a-c)) => a-d
-            val (left, (subLeft, subRight)) = ("a", ("a-b", "a-c"))
-            val right = "a-d"
-            val q = List(left, " <- (", subLeft, ", ", subRight, ")) => ", right)
-                        .foldLeft("(") { (x, xs) => x.concat(xs) }
-
-            given("a single predicate query: ".concat(q))
-            when("the parser is invoked")
-            then("the resulting AST should contain both parts " +
-                 "in the correct positions")
-
-            parser.parseQuery(q) should equal (
-                Intersection(WithSubquery(EdgeTypePredicate("a"),
-                                          Union(EdgeTypePredicate("a-b"),
-                                                EdgeTypePredicate("a-c"))),
-                             EdgeTypePredicate("a-d")))
-        }
-
-        scenario("Attaching sub-queries to the 'left' nodes of a predicate") {
-            // (customer-orders <= customer-details) => (order-details, order-fulfillment)
-        }
     }
 
     feature("Dealing with strict versus non-strict joins") {
 
+        scenario("A Non-Strict Intersect") {
+            given("a non-strict 'intersect' query: (a ~> b)")
+            when(theParserIsInvoked)
+            then("the resulting AST should contain both parts " +
+              "in the correct positions")
+
+            parser.parseQuery("a ~> b") match {
+                case wsq: Intersection =>
+                    wsq.strict should be (false)
+                case _ =>
+                    fail()
+            }
+        }
+
+        scenario("A Non-Strict SubQuery") {
+            given("a non-strict sub-query: (a <~ b)")
+            when(theParserIsInvoked)
+            then("the resulting AST should contain both parts " +
+              "in the correct positions")
+
+            parser.parseQuery("a <~ b") match {
+                case wsq: WithSubquery =>
+                    wsq.strict should be (false)
+                    wsq.axis should be (RightAxis)
+                case _ =>
+                    fail()
+            }
+        }
+
     }
 
-    feature("Including nodes in a join, whilst excluding them from the results") {
+    feature("Specifying which axis a sub-query should be applied to") {
+        info("As a developer")
+        info("I want to specify which axis will receive the results of a sub-query")
+        info("So that I can interpret/generate a suitable implementation")
+
+        scenario("A Strict SubQuery Aligned to the Left Hand Side") {
+            given("a non-strict sub-query, applied to the left axis: (a <-- b)")
+            when(theParserIsInvoked)
+            then("the resulting AST should set the axis property to the correct value")
+
+            parser.parseQuery("a <-- b") match {
+                case wsq: WithSubquery =>
+                    wsq.strict should be (true)
+                    wsq.axis should be (LeftAxis)
+                case _ =>
+                    fail()
+            }
+        }
+
+        ignore("A Non-Strict SubQuery Aligned to the Left Hand Side") {
+            given("a non-strict sub-query, applied to the left axis: (a <~~ b)")
+            when(theParserIsInvoked)
+            then("the resulting AST should set the axis property to the correct value")
+
+            parser.parseQuery("a <~~ b") should equal (
+                new WithSubquery(EdgeTypePredicate("a"),
+                    EdgeTypePredicate("b"),
+                    strict=true, axis=LeftAxis))
+        }
+
+    }
+
+    /*feature("Including nodes in a join, whilst excluding them from the results") {
         ignore("I want to find someone's grandparents") {
 
             // TODO: *person-ancestor[2:]
@@ -208,4 +248,24 @@ class ParserFeatureSpec extends FeatureSpec
                   "Person <: staff-list :> # empty/not-exists"
         }
     }
+
+    ignore("An OGQL 'union' with a nested sub-query") {
+
+        // (a <- (a-b, a-c)) => a-d
+        val (left, (subLeft, subRight)) = ("a", ("a-b", "a-c"))
+        val right = "a-d"
+        val q = List(left, " <- (", subLeft, ", ", subRight, ")) => ", right)
+          .foldLeft("(") { (x, xs) => x.concat(xs) }
+
+        given("a single predicate query: ".concat(q))
+        when(theParserIsInvoked)
+        then("the resulting AST should contain both parts " +
+          "in the correct positions")
+
+        parser.parseQuery(q) should equal (
+            Intersection(WithSubquery(EdgeTypePredicate("a"),
+                Union(EdgeTypePredicate("a-b"),
+                    EdgeTypePredicate("a-c"))),
+                EdgeTypePredicate("a-d")))
+    }*/
 }
