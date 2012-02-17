@@ -57,7 +57,8 @@ trait OGQLParsers extends RegexParsers
         ((intersection | union | edgeSet) ~ (subQuery?)) ^^ {
             case q~sub => sub match {
                 case None => q
-                case Some(ast) => WithSubquery(q, ast)
+                case Some((direction, strictness, ast)) =>
+                    new WithSubquery(q, ast, strictness, direction)
             }  
         }
 
@@ -67,17 +68,11 @@ trait OGQLParsers extends RegexParsers
                 case "=>" => Intersection(edgeSet, query)
                 case "~>" =>
                     val ast = Intersection(edgeSet, query)
-                    ast.strict = true
+                    ast.strict = false
                     ast
             }
     }
 
-    def intersectionOperator = (strictJoin | nonStrictJoin)
-    
-    def strictJoin = literal("=>")
-    
-    def nonStrictJoin = literal("~>")
-    
     def union = edgeSet ~ "," ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
@@ -89,8 +84,17 @@ trait OGQLParsers extends RegexParsers
         }
     }
 
-    def subQuery = "<-" ~> query
-    
+    def subQuery: Parser[(Axis, Boolean, AstNode)] =
+        subQueryOperator ~ query ^^ {
+            case operator~ast =>
+                operator match {
+                    case "<-"   => (RightAxis, true, ast)
+                    case "<~"   => (RightAxis, false, ast)
+                    case "<--"  => (LeftAxis, true, ast)
+                    case "<~~"  => (LeftAxis, false, ast)
+                }
+        }
+
     def group = "(" ~> query <~ ")" ^^ { s => s }
 
     def predicate: Parser[AstNode] =
@@ -111,6 +115,14 @@ trait OGQLParsers extends RegexParsers
         (regex("\\^^[A-Z]"r) ~ word) ^^ {
             case x~y => AxisPredicate(x + y)
         }*/
+
+    def intersectionOperator = (strictJoin | nonStrictJoin)
+    def strictJoin = literal("=>")
+    def nonStrictJoin = literal("~>")
+
+    def subQueryOperator = (strictSubQuery | nonStrictSubQuery)
+    def strictSubQuery = literal ("<--") | literal("<-")
+    def nonStrictSubQuery = literal("<~~") | literal("<~")
 
     def traversalModifier = negationModifier | recursionModifier
 

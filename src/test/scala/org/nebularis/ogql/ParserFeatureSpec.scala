@@ -38,22 +38,6 @@ class ParserFeatureSpec extends FeatureSpec
         }
     }
 
-    feature("Including nodes in a join, whilst excluding them from the results") {
-        ignore("I want to find someone's grandparents") {
-            val qs =
-                "Person['Thor Odinsson'] => { person-ancestor } => person-ancestor"
-        }
-    }
-
-    feature("Checking for the existence of something") {
-        ignore("Finding Managers with no employees/staff-list") {
-            val qs =
-                "{ Role[Manager] } => " +
-                  "Person => EMPTY(staff-list)"
-                  "Person => EXISTS(staff-list)"
-        }
-    }
-
     feature("Parsing OGQL Join Queries") {
         info("As a developer")
         info("I want to parse OGQL join queries")
@@ -173,16 +157,51 @@ class ParserFeatureSpec extends FeatureSpec
                         NodeTypePredicate("Region"))))
         }
 
-        ignore("An OGQL 'union' query") {
-            val (left, right) = ("customer-orders", "order-details")
-            val q = left.concat(", ").concat(right)
+        ignore("An OGQL 'union' with a nested sub-query") {
+
+            // (a <- (a-b, a-c)) => a-d
+            val (left, (subLeft, subRight)) = ("a", ("a-b", "a-c"))
+            val right = "a-d"
+            val q = List(left, " <- (", subLeft, ", ", subRight, ")) => ", right)
+                        .foldLeft("(") { (x, xs) => x.concat(xs) }
 
             given("a single predicate query: ".concat(q))
             when("the parser is invoked")
-            then("the resulting AST should contain both parts")
+            then("the resulting AST should contain both parts " +
+                 "in the correct positions")
 
             parser.parseQuery(q) should equal (
-                Union(EdgeTypePredicate(left), EdgeTypePredicate(right)))
+                Intersection(WithSubquery(EdgeTypePredicate("a"),
+                                          Union(EdgeTypePredicate("a-b"),
+                                                EdgeTypePredicate("a-c"))),
+                             EdgeTypePredicate("a-d")))
+        }
+
+        scenario("Attaching sub-queries to the 'left' nodes of a predicate") {
+            // (customer-orders <= customer-details) => (order-details, order-fulfillment)
+        }
+    }
+
+    feature("Including nodes in a join, whilst excluding them from the results") {
+        ignore("I want to find someone's grandparents") {
+
+            // TODO: *person-ancestor[2:]
+            // TODO: *person-ancestor[:2]
+            // TODO: *person-ancestor[2]
+            // TODO: *person-ancestor[2:3]
+
+            val qs =
+                "Person['Thor Odinsson'] <| person-ancestor |> person-ancestor"
+        }
+    }
+    feature("Checking for the existence of something") {
+        ignore("Finding Managers with no employees/staff-list") {
+            val qs =
+                "<| Role[Manager] |> "
+                  "Person <| EMPTY(staff-list) |>"
+                  "Person <| EXISTS(staff-list) |>"
+                  "Person <| staff-list |> # exists"
+                  "Person <: staff-list :> # empty/not-exists"
         }
     }
 }

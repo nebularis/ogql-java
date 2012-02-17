@@ -16,6 +16,8 @@ class OGQLParserSpec extends FlatSpec
                      with ShouldMatchers
                      with Inside {
 
+    // basic AST serialisation
+
     it should "be reversible into a query (string) representation" in {
         val q = "a => b, c => c-d, c-e"
         val qs = parsed(q).queryString
@@ -31,6 +33,8 @@ class OGQLParserSpec extends FlatSpec
         info("now reparsing from: " + qs.queryString)
         info(parsed(qs.queryString).toString())
     }*/
+
+    // basic predicate handling
 
     it should "consume all its inputs greedily" in {
         parsed("a")        should equal (EdgeTypePredicate("a"))
@@ -56,6 +60,12 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
+    // TODO: filter expressions
+
+    // basic groupings
+
+    // TODO: extend these tests as much as possible
+
     it should "treat groupings as left associative" in {
         parsed("a => (b => c)")            should equal (parsed("a => b => c"))
         parsed("a => (b => (c => d))")     should equal (parsed("a => b => c => d"))
@@ -68,6 +78,27 @@ class OGQLParserSpec extends FlatSpec
         parsed("a-b => (((b-c => c-x), b-d) => (d-n, x-n))") should not equal (
             parsed("a-b => b-c => c-x, b-d => d-n, x-n")
         )
+    }
+
+    // join operations
+
+    it should "distinguish between strict and non-strict 'intersect' join operators" in {
+        forAll ((Gen.alphaStr, "l"),
+            (Gen.alphaStr, "r"),
+            maxDiscarded(100),
+            minSize(2)) { (l: String, r: String) =>
+
+            whenever(l.size > 0 && r.size > 0) {
+                val j = chooseMaybeStrictJoinOperator
+                // generate simple query := (a ~> b) OR (a => b)
+                val intersection: Intersection = parsed(joinExpr(l, j, r)).asInstanceOf[Intersection]
+                intersection should not be (null)
+                intersection.strict match {
+                    case true => j should be ("=>")
+                    case false => j should be ("~>")
+                }
+            }
+        }
     }
 
     it should "assign each axis of a join operation to the appropraite predicate type" in {
@@ -102,10 +133,17 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
+    // TODO: pass-through join operations
+    // TODO: existential join operations
+
+    // sub-queries
+
     it should "apply sub-queries to any valid query expression" in {
         val queryConstructs =
             Table(
                 ("l", "r", "s"),
+
+                // TODO: URGENT: increase the coverage of these table-driven tests
 
                 // ((intersect <- (intersect, edge-name)) => (intersect))
                 ("(customer => order)",
@@ -151,15 +189,29 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
-    def checkSubQuery(sq: String, ast: Any) = ast match {
-        case WithSubquery(leftNode, subQuery) =>
-            info("Original: " + sq + "; Generated: " + subQuery.queryString)
-            subQuery.queryString should equal (sq)
-        case _ =>
-            fail("Expected WithSubquery node nested on the LHS")
+    it should "distinguish between strict and non-strict sub-queries" in {
+        forAll ((Gen.alphaStr, "l"),
+                (Gen.alphaStr, "r"),
+                 maxDiscarded(100),
+                 minSize(2)) { (l: String, r: String) =>
+
+            whenever(l.size > 0 && r.size > 0) {
+                val j = chooseMaybeStrictSubQueryOperator
+                // generate simple query := (a ~> b) OR (a => b)
+                inside(verboseParsing(joinExpr(l, j, r))) {
+                    case withSubQuery: WithSubquery =>
+                        withSubQuery.strict match {
+                            case true => j should equal ("<-")
+                            case false => j should equal ("<~")
+                        }
+                }
+            }
+        }
     }
 
-    it should "support negated traversal modifiers in any valid join expression" in {
+    // traversal modifiers
+
+    it should "support traversal modifiers in any valid join expression" in {
         forAll ((Gen.alphaStr, "l"),
                 (Gen.alphaStr, "r"),
                 maxDiscarded(100),
@@ -204,6 +256,8 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
+    // TODO: result-set slicing
+
     // test utilities, custom generators and property/check configuration
 
     implicit override val generatorDrivenConfig =
@@ -211,8 +265,19 @@ class OGQLParserSpec extends FlatSpec
 
     val padding = " "
 
+    def checkSubQuery(sq: String, ast: Any) = ast match {
+        case WithSubquery(leftNode, subQuery) =>
+            info("Original: " + sq + "; Generated: " + subQuery.queryString)
+            subQuery.queryString should equal (sq)
+        case _ =>
+            fail("Expected WithSubquery node nested on the LHS")
+    }
+
     def traverseRhs(t: String, l: String, j: String, r: String) =
         traverseExpr("", l, j, t.concat(r))
+
+    def joinExpr(l: String, j: String, r: String) =
+        traverseExpr("", l, j, r)
 
     def traverseExpr(t: String, l: String, j: String, r: String) =
         List(t, "(", l, padding, j, padding,
@@ -224,6 +289,12 @@ class OGQLParserSpec extends FlatSpec
     def chooseTraversalOperator =
         Gen.frequency((1, "!"),  (1, "*")).apply(Gen.Params()).get
     
+    def chooseMaybeStrictJoinOperator =
+        Gen.frequency((1, "=>"), (1, "~>")).apply(Gen.Params()).get
+
+    def chooseMaybeStrictSubQueryOperator =
+        Gen.frequency((1, "<-"), (1, "<~")).apply(Gen.Params()).get
+
     private def parsed(q: String) = {
         new OGQLParser().parseQuery(q)
     }

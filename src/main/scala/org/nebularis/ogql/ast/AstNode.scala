@@ -30,6 +30,8 @@ trait JoinType extends QueryRepresentation {
            .concat(operator)
            .concat(rhs.queryString)
            .concat(")")
+
+    var strict: Boolean = true
 }
 
 // node classes
@@ -52,9 +54,8 @@ case class WildcardPredicate()
 case class Intersection(lhs: AstNode,
                         rhs: AstNode)
     extends AstNode with JoinType {
-    def operator = " => "
 
-    var strict: Boolean = false
+    def operator = if (strict) { " => " } else { " ~> " }
 }
 
 case class Union(lhs: AstNode with QueryRepresentation,
@@ -72,9 +73,29 @@ case class WithModifier(mod: Modifier, node: AstNode)
     override def queryString = mod.tokenString.concat(node.queryString)
 }
 
+abstract sealed class Axis
+object LeftAxis extends Axis
+object RightAxis extends Axis
+
 case class WithSubquery(node: AstNode, subNode: AstNode)
     extends AstNode with JoinType {
+
+    def this(node: AstNode, subNode: AstNode,
+             strict: Boolean, axis: Axis) = {
+        this(node, subNode)
+        this.strict = strict
+        this.axis = axis
+    }
+
     override def lhs = node
     override def rhs = subNode
-    override def operator = " <- "
+    override def operator =
+        if (strict) {
+            if (axis == LeftAxis) { " <-- " }
+            else { " <- "}
+        } else {
+            if (axis == LeftAxis) { " <~~ " }
+            else { " <~~ " }
+        }
+    var axis: Axis = RightAxis
 }
