@@ -89,6 +89,7 @@
                 <artifactId>maven-scala-plugin</artifactId>
                 <version>2.15.0</version>
                 <executions>
+                    <!-- TODO: move this into another profile.... -->
                     <!--<execution>
                         <id>cc</id>
                         <phase>compile</phase>
@@ -104,14 +105,14 @@
                         <id>compile</id>
                         <phase>compile</phase>
                         <goals>
-                            <!--<goal>compile</goal>-->
-                            <goal>cc</goal>
+                            <goal>compile</goal>
+                            <!--<goal>cc</goal>-->
                         </goals>
-                        <configuration>
+                        <!--<configuration>
                             <useFsc>true</useFsc>
                             <once>true</once>
                             <verbose>true</verbose>
-                        </configuration>
+                        </configuration>-->
                     </execution>
                     <execution>
                         <id>test-compile</id>
@@ -129,12 +130,12 @@
                         <phase>process-resources</phase>
                         <goals>
                             <goal>add-source</goal>
-                            <goal>cc</goal>
+                            <goal>compile</goal>
                         </goals>
-                        <configuration>
+                        <!--<configuration>
                             <useFsc>true</useFsc>
                             <once>true</once>
-                        </configuration>
+                        </configuration>-->
                     </execution>
                     <execution>
                         <id>scala-test-compile-first</id>

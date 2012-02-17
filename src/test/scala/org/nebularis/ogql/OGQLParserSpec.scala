@@ -1,13 +1,13 @@
 package org.nebularis.ogql
 
-import ast._
+import org.nebularis.ogql.ast._
 import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.{Inside, FlatSpec}
 import org.scalatest.junit.JUnitRunner
 import org.junit.runner.RunWith
 import org.scalacheck.Gen._
 import org.scalacheck.Gen
-import org.scalatest.prop.{PropertyChecks, GeneratorDrivenPropertyChecks, Checkers}
+import org.scalatest.prop.{PropertyChecks, GeneratorDrivenPropertyChecks}
 
 @RunWith(classOf[JUnitRunner])
 class OGQLParserSpec extends FlatSpec

@@ -4,7 +4,7 @@ import org.scalatest.junit.JUnitRunner
 import org.junit.runner.RunWith
 import org.scalatest.{OneInstancePerTest, FeatureSpec, GivenWhenThen}
 import org.scalatest.matchers.ShouldMatchers
-import ast._
+import org.nebularis.ogql.ast._
 
 @RunWith(classOf[JUnitRunner])
 class ParserFeatureSpec extends FeatureSpec
@@ -180,6 +180,10 @@ class ParserFeatureSpec extends FeatureSpec
         scenario("Attaching sub-queries to the 'left' nodes of a predicate") {
             // (customer-orders <= customer-details) => (order-details, order-fulfillment)
         }
+    }
+
+    feature("Dealing with strict versus non-strict joins") {
+
     }
 
     feature("Including nodes in a join, whilst excluding them from the results") {
