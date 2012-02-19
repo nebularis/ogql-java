@@ -54,7 +54,7 @@ trait OGQLParsers extends RegexParsers
     // grammar
 
     def query: Parser[AstNode] =
-        ((intersection | union | edgeSet) ~ (subQuery?)) ^^ {
+        ((intersection | existentialQuery | union | edgeSet) ~ (subQuery?)) ^^ {
             case q~sub => sub match {
                 case None => q
                 case Some((direction, strictness, ast)) =>
@@ -62,7 +62,7 @@ trait OGQLParsers extends RegexParsers
             }  
         }
 
-    def intersection = edgeSet ~ intersectionOperator ~ query ^^ {
+    def intersection = (edgeSet | existentialQuery) ~ intersectionOperator ~ query ^^ {
         case edgeSet~op~query =>
             op match {
                 case "=>" => Intersection(edgeSet, query)
@@ -73,8 +73,51 @@ trait OGQLParsers extends RegexParsers
             }
     }
 
+    // this needs to be split up somehow, so that a <| b |> c works
+
+    def existentialQuery: Parser[AstNode] =
+        intersectedPipe |
+        passThroughPipe  |
+        leftClosedPipe
+
+    def intersectedPipe =
+        edgeSet ~ existentialQuantifier ~ intersectionOperator ~ query ^^ {
+            case lhs~exist~isOp~rhs => isOp match {
+                    case "=>" =>
+                        Intersection(applyExistentialJoinOperator(lhs, exist), rhs)
+                    case "~>" =>
+                        Intersection(new Intersection(lhs, exist, false), rhs)
+                }
+        }
+
+    // a <| b |> c
+    def passThroughPipe = edgeSet ~ existsQuantifier ~ query ^^ {
+        case lhs~pipe~rhs =>
+            Intersection(applyExistentialJoinOperator(lhs, pipe), rhs)
+            /*pipe match {
+                case Exists(_) => Intersection(Intersection(lhs, pipe), rhs)
+                case Empty(_) => Intersection(WithSubquery(lhs, pipe), rhs)
+            }*/
+    }
+
+    // abc <| def |>
+    def leftClosedPipe = edgeSet ~ existentialQuantifier ^^ {
+        case s~q => applyExistentialJoinOperator(s, q)
+    }
+
     def union = edgeSet ~ "," ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
+
+    def existentialQuantifier: Parser[AstNode with ExistentialQuantifier] =
+        existsQuantifier | emptySetQuantifier
+    
+    def existsQuantifier = "<|" ~> edgeSet <~ "|>" ^^ {
+        case q => Exists(q)
+    }
+    
+    def emptySetQuantifier = "<:" ~> edgeSet <~ ":>" ^^ {
+        case q => Empty(q)
+    }
 
     def edgeSet: Parser[AstNode] =
         ((traversalModifier?) ~ (predicate | group)) ^^ {
@@ -108,7 +151,7 @@ trait OGQLParsers extends RegexParsers
     def nodeTypePredicate =
         upperCaseIdentifier ^^ { NodeTypePredicate }
 
-    def wildcardPredicate = "?" ^^ { case _ => WildcardPredicate() }
+    def wildcardPredicate = "~" ^^ { case _ => WildcardPredicate() }
 
     // axisPredicate
     /*def axisPredicate =
@@ -141,6 +184,14 @@ trait OGQLParsers extends RegexParsers
     }
 
     // def string                  = "'" ~ "[^']*".r ~ "'"
+
+    private def applyExistentialJoinOperator(
+                    leftOperand: AstNode,
+                    operator: AstNode with ExistentialQuantifier) =
+        operator match {
+        case Exists(_) => Intersection(leftOperand, operator)
+        case Empty(_) => WithSubquery(leftOperand, operator)
+    }
 }
 
 /**

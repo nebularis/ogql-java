@@ -133,8 +133,36 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
-    // TODO: pass-through join operations
+
     // TODO: existential join operations
+    it should "create an existential node within an intersection " +
+              "when using bracketed-pipe syntax" in {
+        forAll ((Gen.alphaStr, "a"),
+                (Gen.alphaStr, "b"),
+                (Gen.alphaStr, "c"),
+                 maxDiscarded(100),
+                 minSize(2)) { (a: String, b: String, c: String) =>
+
+            whenever(a.size > 0 && b.size > 0 && c.size > 0) {
+
+                val q = a + " <| " + b + " |> " + c
+
+                inside(verboseParsing(q)) {
+                    case Intersection(lhs, _) =>
+                        inside(lhs) {
+                            case Intersection(_, Exists(ast)) =>
+                                ast match {
+                                    case p: Predicate =>
+                                        p.id should equal (b)
+                                }
+                        }
+                }
+            }
+        }
+    }
+
+    // TODO: pass-through join operations
+
 
     // sub-queries
 

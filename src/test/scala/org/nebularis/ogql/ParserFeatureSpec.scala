@@ -40,7 +40,7 @@ class ParserFeatureSpec extends FeatureSpec
         }
     }
 
-    feature("Parsing OGQL Join Queries") {
+    feature("Parsing OGQL JoinType Queries") {
         info("As a developer")
         info("I want to parse OGQL join queries")
         info("So that I can apply them to object graphs at runtime")
@@ -199,6 +199,34 @@ class ParserFeatureSpec extends FeatureSpec
         info("I want to specify which axis will receive the results of a sub-query")
         info("So that I can interpret/generate a suitable implementation")
 
+        scenario("A Strict SubQuery Aligned to the Right Hand Side") {
+            given("a non-strict sub-query, applied to the left axis: (a <- b)")
+            when(theParserIsInvoked)
+            then("the resulting AST should set the axis property to the correct value")
+
+            parser.parseQuery("a <- b") match {
+                case wsq: WithSubquery =>
+                    wsq.strict should be (true)
+                    wsq.axis should be (RightAxis)
+                case _ =>
+                    fail()
+            }
+        }
+
+        scenario("A Non-Strict SubQuery Aligned to the Right Hand Side") {
+            given("a non-strict sub-query, applied to the left axis: (a <~ b)")
+            when(theParserIsInvoked)
+            then("the resulting AST should set the axis property to the correct value")
+
+            parser.parseQuery("a <~ b") match {
+                case wsq: WithSubquery =>
+                    wsq.strict should be (false)
+                    wsq.axis should be (RightAxis)
+                case _ =>
+                    fail()
+            }
+        }
+
         scenario("A Strict SubQuery Aligned to the Left Hand Side") {
             given("a non-strict sub-query, applied to the left axis: (a <-- b)")
             when(theParserIsInvoked)
@@ -213,15 +241,18 @@ class ParserFeatureSpec extends FeatureSpec
             }
         }
 
-        ignore("A Non-Strict SubQuery Aligned to the Left Hand Side") {
+        scenario("A Non-Strict SubQuery Aligned to the Left Hand Side") {
             given("a non-strict sub-query, applied to the left axis: (a <~~ b)")
             when(theParserIsInvoked)
             then("the resulting AST should set the axis property to the correct value")
 
-            parser.parseQuery("a <~~ b") should equal (
-                new WithSubquery(EdgeTypePredicate("a"),
-                    EdgeTypePredicate("b"),
-                    strict=true, axis=LeftAxis))
+            parser.parseQuery("a <~~ b") match {
+                case wsq: WithSubquery =>
+                    wsq.strict should be (false)
+                    wsq.axis should be (LeftAxis)
+                case _ =>
+                    fail()
+            }
         }
 
     }

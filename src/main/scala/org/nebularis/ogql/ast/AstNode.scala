@@ -73,9 +73,8 @@ case class NegationModifier(override val tokenString: String)
 case class RecursionModifier(override val tokenString: String)
     extends AstNode with Modifier
 
-case class WithModifier(mod: Modifier, node: AstNode)
-    extends AstNode with QueryRepresentation {
-    override def queryString = mod.tokenString.concat(node.queryString)
+case class WithModifier(mod: Modifier, node: AstNode) extends AstNode {
+    override def queryString = mod.queryString.concat(node.queryString)
 }
 
 abstract sealed class Axis
@@ -109,4 +108,22 @@ case class WithSubquery(node: AstNode, subNode: AstNode)
         case LeftAxis => 2
         case RightAxis => 1
     }
+}
+
+trait ExistentialQuantifier extends {
+    def delimiter: String
+    def query: AstNode
+    def queryString = " <".concat(delimiter)
+                          .concat(query.queryString)
+                          .concat(delimiter)
+                          .concat("> ")
+
+}
+
+case class Exists(query: AstNode) extends AstNode with ExistentialQuantifier {
+    override def delimiter = "|"
+}
+
+case class Empty(query: AstNode) extends AstNode with ExistentialQuantifier {
+    override def delimiter = ":"
 }
