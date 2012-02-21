@@ -26,6 +26,13 @@ class OGQLParserSpec extends FlatSpec
         qs should equal ("(a => (b, (c => (c-d, c-e))))")
     }
     
+    it should "do what I expect" in {
+        parsed("a <| b |> c") should equal (
+            Intersection(Intersection(EdgeTypePredicate("a"),
+                                      Exists(EdgeTypePredicate("b"))),
+                         EdgeTypePredicate("c")))
+    }
+    
     /*it should "produce a semantically equivalent representation" in {
         val qs =
             parsed("a-b => (((b-c => c-x), b-d) => (d-n, x-n))")
@@ -151,7 +158,7 @@ class OGQLParserSpec extends FlatSpec
                     case Intersection(lhs, _) =>
                         inside(lhs) {
                             case Intersection(_, Exists(ast)) =>
-                                ast match {
+                                inside(ast) {
                                     case p: Predicate =>
                                         p.id should equal (b)
                                 }

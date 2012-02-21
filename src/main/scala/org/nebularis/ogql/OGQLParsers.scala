@@ -180,7 +180,7 @@ trait OGQLParsers extends RegexParsers
         (regex("[A-Z]"r) ~ word) ^^ { case x~y => x+y }
 
     def word = (regex("[\\w\\-_]+"r) *) ^^ {
-        case l:List[String] => l.foldLeft("") { (acc, in) => acc + in }
+        case l: List[String] => l.foldLeft("") { (acc, in) => acc + in }
     }
 
     // def string                  = "'" ~ "[^']*".r ~ "'"

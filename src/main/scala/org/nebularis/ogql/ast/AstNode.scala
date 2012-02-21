@@ -61,6 +61,23 @@ case class Intersection(lhs: AstNode,
     }
 
     def operator = if (strict) { " => " } else { " ~> " }
+
+    override def queryString = (lhs, rhs) match {
+        case (Intersection(_, Exists(_)), _) =>
+            queryStringExcludingOperator
+        case (Intersection(_, Empty(_)), _) =>
+            queryStringExcludingOperator
+        case (_, Exists(_)) =>
+            queryStringExcludingOperator
+        case (_, Empty(_)) =>
+            queryStringExcludingOperator
+        case x =>
+            super.queryString
+    }
+
+    private def queryStringExcludingOperator: String =
+        "(".concat(lhs.queryString).concat(" ")
+            .concat(rhs.queryString).concat(")")
 }
 
 case class Union(lhs: AstNode with QueryRepresentation,
@@ -113,9 +130,9 @@ case class WithSubquery(node: AstNode, subNode: AstNode)
 trait ExistentialQuantifier extends {
     def delimiter: String
     def query: AstNode
-    def queryString = " <".concat(delimiter)
+    def queryString = " <".concat(delimiter).concat(" ")
                           .concat(query.queryString)
-                          .concat(delimiter)
+                          .concat(" ").concat(delimiter)
                           .concat("> ")
 
 }
