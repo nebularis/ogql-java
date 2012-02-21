@@ -26,6 +26,13 @@ class OGQLParserSpec extends FlatSpec
         qs should equal ("(a => (b, (c => (c-d, c-e))))")
     }
     
+    /*it should "do what I expect" in {
+        parsed("(a <| b) => c") should equal (
+            Intersection(Intersection(EdgeTypePredicate("a"),
+                                      Exists(EdgeTypePredicate("b"))),
+                         EdgeTypePredicate("c")))
+    }*/
+    
     /*it should "produce a semantically equivalent representation" in {
         val qs =
             parsed("a-b => (((b-c => c-x), b-d) => (d-n, x-n))")
@@ -135,8 +142,7 @@ class OGQLParserSpec extends FlatSpec
 
 
     // TODO: existential join operations
-    it should "create an existential node within an intersection " +
-              "when using bracketed-pipe syntax" in {
+    it should "apply existential quantifiers using a subquery node" in {
         forAll ((Gen.alphaStr, "a"),
                 (Gen.alphaStr, "b"),
                 (Gen.alphaStr, "c"),
@@ -145,16 +151,33 @@ class OGQLParserSpec extends FlatSpec
 
             whenever(a.size > 0 && b.size > 0 && c.size > 0) {
 
-                val q = a + " <| " + b + " |> " + c
+                val exists = "(" + a + " <= " + b + ") => " + c
 
-                inside(verboseParsing(q)) {
+                inside(verboseParsing(exists)) {
                     case Intersection(lhs, _) =>
                         inside(lhs) {
-                            case Intersection(_, Exists(ast)) =>
-                                ast match {
+                            case WithSubquery(_, Exists(ast)) =>
+                                inside(ast) {
                                     case p: Predicate =>
                                         p.id should equal (b)
                                 }
+                        }
+                }
+
+                val empty = "(" + a + " <| " + b + ") => " + c
+
+                inside(verboseParsing(empty)) {
+                    case Intersection(lhs, _) =>
+                        inside(lhs) {
+                            case Intersection(_, Empty(ast)) =>
+                                inside(ast) {
+                                    case p: Predicate =>
+                                        p.id should equal (b)
+                                    case other =>
+                                        fail("unexpected: " + other.toString)
+                                }
+                                /*foo should not be (null)
+                                info("foo = " + foo.toString)*/
                         }
                 }
             }

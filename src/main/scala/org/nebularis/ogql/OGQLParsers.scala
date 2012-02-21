@@ -54,7 +54,7 @@ trait OGQLParsers extends RegexParsers
     // grammar
 
     def query: Parser[AstNode] =
-        ((intersection | existentialQuery | union | edgeSet) ~ (subQuery?)) ^^ {
+        ((intersection | union | edgeSet) ~ (subQuery?)) ^^ {
             case q~sub => sub match {
                 case None => q
                 case Some((direction, strictness, ast)) =>
@@ -62,7 +62,7 @@ trait OGQLParsers extends RegexParsers
             }  
         }
 
-    def intersection = (edgeSet | existentialQuery) ~ intersectionOperator ~ query ^^ {
+    def intersection = edgeSet ~ intersectionOperator ~ query ^^ {
         case edgeSet~op~query =>
             op match {
                 case "=>" => Intersection(edgeSet, query)
@@ -73,57 +73,33 @@ trait OGQLParsers extends RegexParsers
             }
     }
 
-    // this needs to be split up somehow, so that a <| b |> c works
+    // (a <= b) => c
+    // (a <| b) => c
 
-    def existentialQuery: Parser[AstNode] =
-        intersectedPipe |
-        passThroughPipe  |
-        leftClosedPipe
-
-    def intersectedPipe =
-        edgeSet ~ existentialQuantifier ~ intersectionOperator ~ query ^^ {
-            case lhs~exist~isOp~rhs => isOp match {
-                    case "=>" =>
-                        Intersection(applyExistentialJoinOperator(lhs, exist), rhs)
-                    case "~>" =>
-                        Intersection(new Intersection(lhs, exist, false), rhs)
-                }
-        }
-
-    // a <| b |> c
-    def passThroughPipe = edgeSet ~ existsQuantifier ~ query ^^ {
-        case lhs~pipe~rhs =>
-            Intersection(applyExistentialJoinOperator(lhs, pipe), rhs)
-            /*pipe match {
-                case Exists(_) => Intersection(Intersection(lhs, pipe), rhs)
-                case Empty(_) => Intersection(WithSubquery(lhs, pipe), rhs)
-            }*/
-    }
-
-    // abc <| def |>
-    def leftClosedPipe = edgeSet ~ existentialQuantifier ^^ {
-        case s~q => applyExistentialJoinOperator(s, q)
-    }
-
-    def union = edgeSet ~ "," ~ query ^^
+    def union = edgeSet ~ unionOperator ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
-    def existentialQuantifier: Parser[AstNode with ExistentialQuantifier] =
-        existsQuantifier | emptySetQuantifier
-    
-    def existsQuantifier = "<|" ~> edgeSet <~ "|>" ^^ {
-        case q => Exists(q)
-    }
-    
-    def emptySetQuantifier = "<:" ~> edgeSet <~ ":>" ^^ {
-        case q => Empty(q)
+    def edgeSet = ("{"?) ~ traversal ~ ("}"?) ^^ {
+        case open~ast~close => (open, close) match {
+            case (None, None) => ast
+            case (Some(_), Some(_)) => WithModifier(TraversalOnlyModifier(), ast)
+        }
     }
 
-    def edgeSet: Parser[AstNode] =
-        ((traversalModifier?) ~ (predicate | group)) ^^ {
-        case mod~set => mod match {
-            case None => set
-            case Some(modifier) => WithModifier(modifier, set)
+    def traversal: Parser[AstNode] =
+        ((traversalModifier?) ~ (predicate | group) ~ (subQuery?)) ^^ {
+        case mod~set~sq => mod match {
+            case None => sq match {
+                case None => set
+                case Some((direction, strictness, ast)) =>
+                    new WithSubquery(set, ast, strictness, direction)
+            }
+            case Some(modifier) => sq match {
+                case None => WithModifier(modifier, set)
+                case Some((direction, strictness, ast)) =>
+                    WithModifier(modifier,
+                        new WithSubquery(set, ast, strictness, direction))
+            }
         }
     }
 
@@ -135,6 +111,8 @@ trait OGQLParsers extends RegexParsers
                     case "<~"   => (RightAxis, false, ast)
                     case "<--"  => (LeftAxis, true, ast)
                     case "<~~"  => (LeftAxis, false, ast)
+                    case "<="   => (RightAxis, true, Exists(ast))
+                    case "<|"   => (RightAxis, true, Empty(ast))
                 }
         }
 
@@ -162,10 +140,16 @@ trait OGQLParsers extends RegexParsers
     def intersectionOperator = (strictJoin | nonStrictJoin)
     def strictJoin = literal("=>")
     def nonStrictJoin = literal("~>")
+    
+    def unionOperator = literal(",")
 
-    def subQueryOperator = (strictSubQuery | nonStrictSubQuery)
+    def subQueryOperator = (strictSubQuery | nonStrictSubQuery | existentialQuantifier)
     def strictSubQuery = literal ("<--") | literal("<-")
     def nonStrictSubQuery = literal("<~~") | literal("<~")
+
+    def existentialQuantifier = existsTest | emptyTest
+    def existsTest = literal("<=")
+    def emptyTest  = literal("<|")
 
     def traversalModifier = negationModifier | recursionModifier
 
@@ -180,18 +164,11 @@ trait OGQLParsers extends RegexParsers
         (regex("[A-Z]"r) ~ word) ^^ { case x~y => x+y }
 
     def word = (regex("[\\w\\-_]+"r) *) ^^ {
-        case l:List[String] => l.foldLeft("") { (acc, in) => acc + in }
+        case l: List[String] => l.foldLeft("") { (acc, in) => acc + in }
     }
 
     // def string                  = "'" ~ "[^']*".r ~ "'"
 
-    private def applyExistentialJoinOperator(
-                    leftOperand: AstNode,
-                    operator: AstNode with ExistentialQuantifier) =
-        operator match {
-        case Exists(_) => Intersection(leftOperand, operator)
-        case Empty(_) => WithSubquery(leftOperand, operator)
-    }
 }
 
 /**
