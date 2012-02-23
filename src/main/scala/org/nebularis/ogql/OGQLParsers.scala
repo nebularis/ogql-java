@@ -62,6 +62,7 @@ trait OGQLParsers extends RegexParsers
             }  
         }
 
+    // a => b
     def intersection = edgeSet ~ intersectionOperator ~ query ^^ {
         case edgeSet~op~query =>
             op match {
@@ -73,12 +74,11 @@ trait OGQLParsers extends RegexParsers
             }
     }
 
-    // (a <= b) => c
-    // (a <| b) => c
-
+    // a, b
     def union = edgeSet ~ unionOperator ~ query ^^
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
+    // predicate | { no-output-predicate }
     def edgeSet = ("{"?) ~ traversal ~ ("}"?) ^^ {
         case open~ast~close => (open, close) match {
             case (None, None) => ast
@@ -86,6 +86,7 @@ trait OGQLParsers extends RegexParsers
         }
     }
 
+    // c-b => !a-b, *b-b <- (b-c => c-d)
     def traversal: Parser[AstNode] =
         ((traversalModifier?) ~ (predicate | group) ~ (subQuery?)) ^^ {
         case mod~set~sq => mod match {
@@ -103,6 +104,11 @@ trait OGQLParsers extends RegexParsers
         }
     }
 
+    // strict (inner) join: a <- b, c
+    // non-strict (outer) join: a <~ b, c
+    // left axis binding: a <-- b, b <~~ c
+    // exists: a <= b
+    // empty (not exists): a <| b
     def subQuery: Parser[(Axis, Boolean, AstNode)] =
         subQueryOperator ~ query ^^ {
             case operator~ast =>
@@ -118,6 +124,7 @@ trait OGQLParsers extends RegexParsers
 
     def group = "(" ~> query <~ ")" ^^ { s => s }
 
+    //
     def predicate: Parser[AstNode] =
         edgeTypePredicate |
         nodeTypePredicate |
