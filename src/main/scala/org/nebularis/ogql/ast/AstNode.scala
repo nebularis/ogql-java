@@ -12,7 +12,7 @@ trait QueryRepresentation {
  * to which nodes once we've successfully built our AST
  */
 trait Modifier extends QueryRepresentation {
-    val tokenString: String = null
+    val tokenString: String = ""
     override def queryString = tokenString
 }
 
@@ -61,23 +61,6 @@ case class Intersection(lhs: AstNode,
     }
 
     def operator = if (strict) { " => " } else { " ~> " }
-
-    override def queryString = (lhs, rhs) match {
-        case (Intersection(_, Exists(_)), _) =>
-            queryStringExcludingOperator
-        case (Intersection(_, Empty(_)), _) =>
-            queryStringExcludingOperator
-        case (_, Exists(_)) =>
-            queryStringExcludingOperator
-        case (_, Empty(_)) =>
-            queryStringExcludingOperator
-        case x =>
-            super.queryString
-    }
-
-    private def queryStringExcludingOperator: String =
-        "(".concat(lhs.queryString).concat(" ")
-            .concat(rhs.queryString).concat(")")
 }
 
 case class Union(lhs: AstNode with QueryRepresentation,
@@ -89,6 +72,8 @@ case class NegationModifier(override val tokenString: String)
 
 case class RecursionModifier(override val tokenString: String)
     extends AstNode with Modifier
+
+case class TraversalOnlyModifier() extends AstNode with Modifier
 
 case class WithModifier(mod: Modifier, node: AstNode) extends AstNode {
     override def queryString = mod.queryString.concat(node.queryString)
@@ -110,9 +95,13 @@ case class WithSubquery(node: AstNode, subNode: AstNode)
 
     override def lhs = node
     override def rhs = subNode
-    override def operator = strict match {
-        case true => mkString("-")
-        case false => mkString("~")
+    override def operator = rhs match {
+        case Exists(_)  => mkString("=")
+        case Empty(_)   => mkString("|")
+        case _ => strict match {
+            case true => mkString("-")
+            case false => mkString("~")
+        }
     }
 
     var axis: Axis = RightAxis
@@ -127,20 +116,10 @@ case class WithSubquery(node: AstNode, subNode: AstNode)
     }
 }
 
-trait ExistentialQuantifier extends {
-    def delimiter: String
-    def query: AstNode
-    def queryString = " <".concat(delimiter).concat(" ")
-                          .concat(query.queryString)
-                          .concat(" ").concat(delimiter)
-                          .concat("> ")
-
+case class Exists(query: AstNode) extends AstNode {
+    override def queryString = query.queryString
 }
 
-case class Exists(query: AstNode) extends AstNode with ExistentialQuantifier {
-    override def delimiter = "|"
-}
-
-case class Empty(query: AstNode) extends AstNode with ExistentialQuantifier {
-    override def delimiter = ":"
+case class Empty(query: AstNode) extends AstNode {
+    override def queryString = query.queryString
 }
