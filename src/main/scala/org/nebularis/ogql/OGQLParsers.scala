@@ -79,15 +79,7 @@ trait OGQLParsers extends RegexParsers
         { case edgeSet~comma~query => Union(edgeSet, query) }
 
     // predicate | { no-output-predicate }
-    def edgeSet = ("{"?) ~ traversal ~ ("}"?) ^^ {
-        case open~ast~close => (open, close) match {
-            case (None, None) => ast
-            case (Some(_), Some(_)) => WithModifier(TraversalOnlyModifier(), ast)
-        }
-    }
-
-    // c-b => !a-b, *b-b <- (b-c => c-d)
-    def traversal: Parser[AstNode] =
+    def edgeSet: Parser[AstNode] =
         ((traversalModifier?) ~ (predicate | group) ~ (subQuery?)) ^^ {
         case mod~set~sq => mod match {
             case None => sq match {
@@ -122,9 +114,13 @@ trait OGQLParsers extends RegexParsers
                 }
         }
 
-    def group = "(" ~> query <~ ")" ^^ { s => s }
+    def group = openGroupingOrTraversalModifier ~ query ~ closeGroupingOrTraversalModifier ^^ {
+        case open~q~close => (open, close) match {
+            case ("(", ")") => q
+            case ("{", "}") => WithModifier(TraversalOnlyModifier, q)
+        }
+    }
 
-    //
     def predicate: Parser[AstNode] =
         edgeTypePredicate |
         nodeTypePredicate |
@@ -143,6 +139,9 @@ trait OGQLParsers extends RegexParsers
         (regex("\\^^[A-Z]"r) ~ word) ^^ {
             case x~y => AxisPredicate(x + y)
         }*/
+
+    def openGroupingOrTraversalModifier = literal("(") | literal ("{")
+    def closeGroupingOrTraversalModifier = literal(")") | literal ("}")
 
     def intersectionOperator = (strictJoin | nonStrictJoin)
     def strictJoin = literal("=>")
@@ -175,7 +174,6 @@ trait OGQLParsers extends RegexParsers
     }
 
     // def string                  = "'" ~ "[^']*".r ~ "'"
-
 }
 
 /**

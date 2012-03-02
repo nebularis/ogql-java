@@ -140,6 +140,7 @@ class OGQLParserSpec extends FlatSpec
         }
     }
 
+    // sub-queries
 
     // TODO: existential join operations
     it should "apply existential quantifiers using a subquery node" in {
@@ -153,7 +154,7 @@ class OGQLParserSpec extends FlatSpec
 
                 val exists = "(" + a + " <= " + b + ") => " + c
 
-                inside(verboseParsing(exists)) {
+                inside(parsed(exists)) {
                     case Intersection(lhs, _) =>
                         inside(lhs) {
                             case WithSubquery(_, Exists(ast)) =>
@@ -166,7 +167,7 @@ class OGQLParserSpec extends FlatSpec
 
                 val empty = "(" + a + " <| " + b + ") => " + c
 
-                inside(verboseParsing(empty)) {
+                inside(parsed(empty)) {
                     case Intersection(lhs, _) =>
                         inside(lhs) {
                             case WithSubquery(_, Empty(ast)) =>
@@ -183,11 +184,6 @@ class OGQLParserSpec extends FlatSpec
             }
         }
     }
-
-    // TODO: pass-through join operations
-
-
-    // sub-queries
 
     it should "apply sub-queries to any valid query expression" in {
         val queryConstructs =
@@ -293,6 +289,63 @@ class OGQLParserSpec extends FlatSpec
     }
 
     // traversal modifiers
+
+    it should "apply a traversal-only modifier to pass-through joins" in {
+        forAll ((Gen.alphaStr, "a"),
+            (Gen.alphaStr, "b"),
+            (Gen.alphaStr, "c"),
+            maxDiscarded(100),
+            minSize(2)) { (a: String, b: String, c: String) =>
+
+            whenever(a.size > 0 && b.size > 0 && c.size > 0) {
+
+                inside(parsed("(" + a + " => {" + b + "}) => " + c)) {
+                    case Intersection(lhs, _) =>
+                        inside(lhs) {
+                            case Intersection(_, WithModifier(mod, _)) =>
+                                mod should equal (TraversalOnlyModifier)
+                        }
+                }
+
+            }
+        }
+    }
+
+    it should "allow traversal-only modifiers in place of grouping" in {
+        forAll((Gen.alphaStr, "a"),
+            (Gen.alphaStr, "b"),
+            (Gen.alphaStr, "c"),
+            maxDiscarded(100),
+            minSize(2)) {
+            (a: String, b: String, c: String) =>
+
+            whenever(a.size > 0 && b.size > 0 && c.size > 0) {
+
+                // go through 'b' but don't return its edges, e.g.,
+                // a => { b } => c
+                inside(verboseParsing(a + " => {" + b + "} => " + c)) {
+                    case Intersection(_, rhs) =>
+                        inside(rhs) {
+                            case Intersection(WithModifier(mod, _), _) =>
+                                mod should equal (TraversalOnlyModifier)
+                        }
+                }
+
+                // treat 'b => c' as a group and continue traversing, but don't return its edges, e.g.,
+                // a => { b => c } => d
+                // NB: the final intersection is not present in the actual test case as we don't need to test it here
+                inside(verboseParsing(a + " => {" + b + " => " + c + "}")) {
+                    case Intersection(_, rhs) =>
+                        inside(rhs) {
+                            case WithModifier(mod, _) =>
+                                mod should equal (TraversalOnlyModifier)
+                        }
+                }
+
+            }
+
+        }
+    }
 
     it should "support traversal modifiers in any valid join expression" in {
         forAll ((Gen.alphaStr, "l"),

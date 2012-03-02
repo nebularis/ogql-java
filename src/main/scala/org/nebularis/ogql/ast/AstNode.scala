@@ -26,10 +26,12 @@ trait JoinType extends QueryRepresentation {
     def rhs: QueryRepresentation
     def operator: String
     override def queryString =
-        "(".concat(lhs.queryString)
+        "(".concat(unwrappedQueryString).concat(")")
+
+    def unwrappedQueryString =
+        lhs.queryString
            .concat(operator)
            .concat(rhs.queryString)
-           .concat(")")
 
     var strict: Boolean = true
 }
@@ -73,10 +75,17 @@ case class NegationModifier(override val tokenString: String)
 case class RecursionModifier(override val tokenString: String)
     extends AstNode with Modifier
 
-case class TraversalOnlyModifier() extends AstNode with Modifier
+object TraversalOnlyModifier extends AstNode with Modifier
 
 case class WithModifier(mod: Modifier, node: AstNode) extends AstNode {
-    override def queryString = mod.queryString.concat(node.queryString)
+    override def queryString = mod match {
+        case TraversalOnlyModifier =>
+            node match {
+                case jt: JoinType => "{".concat(jt.unwrappedQueryString).concat("}")
+                case _ => "{".concat(node.queryString).concat("}")
+            }
+        case _ => mod.queryString.concat(node.queryString)
+    }
 }
 
 abstract sealed class Axis
